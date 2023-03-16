@@ -1,0 +1,265 @@
+// Polar Waves - a simple demo for testing performance on different platforms & setups
+//
+// VO.1 unofficial preview version
+// (c) by Stefan Petrick 2023
+// I publish this code under creative commons license CC BY-NC 3.0
+
+#include <FastLED.h>
+
+#define WIDTH  16                       // how many LEDs are in one row?
+#define HEIGHT 16                       // how many rows?
+#define NUM_LEDS ((WIDTH) * (HEIGHT))
+
+float c, d, e, f, time;                 // some timedependant counters
+float newdist, newangle;                // parameters for reconstruction
+float z;                                // 3d dimension for the 3d noise function
+float offset_x, offset_y;               // wanna shift the cartesians during runtime?
+float scale_x, scale_y;                 // cartesian scaling in 2 dimensions
+float dist, angle;                      // the actual polar coordinates
+
+int x, y;                               // the cartesian coordiantes
+int num_x = WIDTH;                      // horizontal pixel count
+int num_y = HEIGHT;                     // vertical pixel count
+
+// Background for setting the following 2 numbers: the FastLED inoise16() function returns
+// raw values ranging from 0-65535. In order to improve contrast we filter this output and
+// stretch the remains. In histogram (photography) terms this means setting a blackpoint and
+// a whitepoint. low_limit MUST be smaller than high_limit.
+
+uint16_t low_limit  = 30000;            // everything lower drawns in black
+                                        // higher numer = more black & more contrast present
+uint16_t high_limit = 50000;            // everything higher gets maximum brightness & bleeds out
+                                        // lower number = the result will be more bright & shiny
+
+float center_x = (num_x / 2) - 0.5;     // the reference point for polar coordinates
+float center_y = (num_y / 2) - 0.5;     // (can also be outside of the actual xy matrix)
+
+CRGB leds[WIDTH * HEIGHT];              // framebuffer
+
+float theta[WIDTH] [HEIGHT];
+float distance[WIDTH] [HEIGHT];
+
+void setup() {
+
+  Serial.begin(115200);                 // check serial monitor for current fps count
+  
+  // Teensy 3.x & 4.x users: make sure to use the hardware SPI pins 11 & 13
+  // for best performance
+  
+  FastLED.addLeds<APA102, 11, 13, BGR, DATA_RATE_MHZ(12)>(leds, NUM_LEDS);    
+ 
+  render_lookup_table();                // precalculate as much data as possible to improve the framerate
+}
+
+void loop() {
+
+  // set timers
+
+  time = millis();                  // save elapsed ms since start up
+
+  time = time * 0.6;                // global anaimation speed
+
+  float linear_c = time * 0.0025;               // some linear rising offsets
+  float linear_d = time * 0.0030;
+  float linear_e = time * 0.0023;
+
+  float angle_c = fmodf(linear_c, 2 * PI);;     // some angle offsets
+  float angle_d = fmodf(linear_d, 2 * PI);;
+  float angle_e = fmodf(linear_e, 2 * PI);;
+
+  /*
+  float dir_c = sinf(c);                        // some multiplicator offests (for direction control)
+  float dir_d = sinf(d);
+  float dir_e = sinf(e);
+  */
+
+  // calculate whats constant in this current frame
+
+  // center_x = (num_x / 2) - 0.5;     // the polar origin
+  // center_y = (num_y / 2) - 0.5;
+
+  // the HOT LOOP where the magic happens
+
+  for (x = 0; x < num_x; x++) {
+    for (y = 0; y < num_y; y++) {
+
+      // pick data from look up table (helps the framerate on slow processors ;) 
+
+      dist  = distance [x] [y];
+      angle = theta    [y] [x];
+
+      // Layer 1 - red -------------------------------------------------------------
+
+      // calculate distance and angle of the point relative to
+      // the origin described by center_x & center_y
+
+      // get_polar_values();
+
+      // set all parameters for the first layer (red)
+
+      scale_x = 15000;
+      scale_y = 15000;
+      newangle = angle + angle_c - (dist * 0.2);
+      newdist = sqrtf(dist);
+      z = 500000000 - (( dist / 6 ) - linear_c) * 100000;
+      offset_x = 0;
+      offset_y = 0;
+
+      // convert polar coordinates back to cartesian
+      // & render noise value there
+
+      uint8_t show1 = render_pixel();
+
+      // Layer 2 - green -------------------------------------------------------
+      
+      scale_x = 14000;
+      scale_y = 14000;
+      newangle = angle + angle_d - (dist * 0.23);
+      z = 500000000 - (( dist / 5 ) - linear_d) * 110000;
+      offset_x = 42;
+      offset_y = 69;
+      uint8_t show2 = render_pixel();
+
+      // Layer 3 - blue -------------------------------------------------------
+      
+      scale_x = 13000;
+      scale_y = 13000;
+      newangle = angle + angle_e - (dist * 0.19);
+      z = 500000000 - (( dist / 4 ) - linear_e) * 120000;
+      offset_x = 420;
+      offset_y = 690;
+      uint8_t show3 = render_pixel();
+ 
+      // assign the rendered values to colors (aka colormapping)
+      CRGB color = CRGB(show1, show2, show3);
+
+      // write the rendered pixel into the framebutter
+      leds[XY(x, y)] = color;
+
+    }
+  }
+
+  // make the frame appear nice to humans 
+  // (correct for non-linear brightness sensitivity of the human eye)
+  adjust_gamma();
+
+  // BRING IT ON! SHOW WHAT YOU GOT!
+  FastLED.show();
+
+  // check serial monitor for current performance numbers
+  EVERY_N_MILLIS(500) report_performance();
+
+
+}
+
+
+// calculate distance and angle of the point relative to
+// the polar origin defined by center_x & center_y
+
+void get_polar_values() {
+
+  // calculate current cartesian distances (deltas) from polar origin point
+
+  float dx = x - center_x;
+  float dy = y - center_y;
+
+  // calculate distance between current point & polar origin
+  // (length of the origin vector, pythgorean theroem)
+  // dist = sqrt((dx*dx)+(dy*dy));
+
+  dist = hypotf(dx, dy);
+
+  // calculate the angle
+  // (where around the polar origin is the current point?)
+
+  angle = atan2f(dy, dx);
+
+  // done, that's all we need
+}
+
+
+// convert polar coordinates back to cartesian
+// & render noise value there
+
+uint8_t render_pixel() {
+
+  // convert polar coordinates back to cartesian ones
+  //fmodf(newangle, 2 * PI);  //NO, not here!
+
+  float newx = (offset_x + center_x - (cosf(newangle) * newdist)) * scale_x;
+  float newy = (offset_y + center_y - (sinf(newangle) * newdist)) * scale_y;
+
+  // render noisevalue at this new cartesian point
+
+  uint16_t raw_noise_field_value = inoise16(newx, newy, z);
+
+  // a lot is happening here, namely
+  // A) enhance histogram (improve contrast) by setting the black and white point
+  // B) scale the result to a 0-255 range
+  // it's the contrast boosting & the "colormapping" (technically brightness mapping)
+
+  if (raw_noise_field_value < low_limit)  raw_noise_field_value =  low_limit;
+  if (raw_noise_field_value > high_limit) raw_noise_field_value = high_limit;
+
+  uint8_t scaled_noise_value = map(raw_noise_field_value, low_limit, high_limit, 0, 255);
+
+  return scaled_noise_value;
+
+  // done, we've just rendered one color value for one single pixel
+}
+
+
+// find the right led index
+
+uint16_t XY(uint8_t x, uint8_t y) {
+  if (y & 1)
+    return (y + 1) * WIDTH - 1 - x;
+  else
+    return y * WIDTH + x;
+}
+
+
+// make it look nicer - expand low brightness values and compress high brightness values,
+// basically we perform gamma curve bending for all 3 color chanels,
+// making more detail visible which otherwise tends to get lost in brightness
+
+void adjust_gamma() {
+  for (uint16_t i = 0; i < NUM_LEDS; i++)
+  {
+    leds[i].r = dim8_video(leds[i].r);
+    leds[i].g = dim8_video(leds[i].g);
+    leds[i].b = dim8_video(leds[i].b);
+  }
+}
+
+// given a static polar origin we can precalculate 
+// all the (expensive) polar coordinates
+
+void render_lookup_table() {
+
+  center_x = (num_x / 2) - 0.5;     
+  center_y = (num_y / 2) - 0.5;
+
+  for (int xx = 0; xx < num_x; xx++) {
+    for (int yy = 0; yy < num_y; yy++) {
+
+        float dx = xx - center_x;
+        float dy = yy - center_y;
+
+      distance[xx] [yy] = hypotf(dx, dy);
+      theta[xx] [yy]    = atan2f(dy, dx);
+    }
+  }
+}
+
+// show current framerate and rendered pixels per second
+
+void report_performance() {
+ 
+  int fps = FastLED.getFPS();
+  int kpps = (fps * HEIGHT * WIDTH) / 1000;
+
+  Serial.print(kpps); Serial.print(" Kilopixel/s @ ");
+  Serial.print(fps); Serial.println(" fps");
+  
+}
