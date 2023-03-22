@@ -30,7 +30,7 @@ struct ColorSum
 struct Parameters
 {
   float dist, newangle;                // parameters for reconstruction
-  float z;                                // 3rd dimension for the 3d noise function
+  uint32_t z;                                // 3rd dimension for the 3d noise function
   float offset_x, offset_y;               // wanna shift the cartesians during runtime?
   float scale_x, scale_y;                 // cartesian scaling in 2 dimensions
   float distSqrt, angle;                      // the actual polar coordinates
@@ -41,14 +41,14 @@ struct Parameters
 struct
 {
   CRGB *currentBuffer;
-  float notTime = 0;                // global anaimation speed
-  float linear_c = 0;               // some linear rising offsets
-  float linear_d = 0;
-  float linear_e = 0;
+  double notTime = 0;                // global anaimation speed
+  double linear_c = 0;               // some linear rising offsets
+  double linear_d = 0;
+  double linear_e = 0;
 
-  float angle_c = fmodf(linear_c, 2 * PI);     // some angle offsets
-  float angle_d = fmodf(linear_d, 2 * PI);
-  float angle_e = fmodf(linear_e, 2 * PI);
+  float angle_c = fmod(linear_c, 2 * PI);     // some angle offsets
+  float angle_d = fmod(linear_d, 2 * PI);
+  float angle_e = fmod(linear_e, 2 * PI);
 
 } volatile shared;
 
@@ -80,67 +80,71 @@ TaskHandle_t task;
 volatile xSemaphoreHandle loop1go = xSemaphoreCreateBinary();
 volatile xSemaphoreHandle loop2go = xSemaphoreCreateBinary();
 
-void doTheThing(int x, int y)
+void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
 {
   struct Parameters parameters;
-  parameters.distSqrt  = distanceSqrt [x][y];
-  parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
-  // angle = theta    [y] [x];
-  parameters.angle = theta    [x][y];
-
-  // Layer 1 - red -------------------------------------------------------------
-
-  // calculate distance and angle of the point relative to
-  // the origin described by center_x & center_y
-
-  // get_polar_values();
-
-  // set all parameters for the first layer (red)
-
+  
   parameters.scale_x = 15000;
   parameters.scale_y = 15000;
-  parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.2);
   // newdist = sqrtf(dist);
   // newdist = sqrtApprox(dist);
-  parameters.z = 500000000 - (( parameters.dist / 6 ) - shared.linear_c) * 100000;
+  parameters.z = shared.linear_c * 100000;
   // z = 500000000 - (( dist * 0.166666667 ) - linear_c) * 100000;
   parameters.offset_x = 0;
   parameters.offset_y = 0;
+  uint32_t z = shared.linear_c * 100000.0;
+  for (int x = xStart; x < xEnd; x++)
+  {
+    for (int y = yStart; y < yEnd; y++)
+    {
+      parameters.distSqrt  = distanceSqrt [x][y];
+      parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
+      parameters.z = z - (uint32_t)(parameters.dist * 16666.66667);
+      parameters.angle = theta    [x][y];
+      parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.2);
+      shared.currentBuffer[x + y * SCREEN_WIDTH].r = render_pixel(parameters);
+    }
+  }
 
-  // convert polar coordinates back to cartesian
-  // & render noise value there
-
-  uint8_t show1 = render_pixel(parameters);
-
-  // Layer 2 - green -------------------------------------------------------
-      
   parameters.scale_x = 14000;
   parameters.scale_y = 14000;
-  parameters.newangle = parameters.angle + shared.angle_d - (parameters.dist * 0.23);
-  parameters.z = 500000000 - (( parameters.dist / 5 ) - shared.linear_d) * 110000;
+  // parameters.z = shared.linear_d * 110000;
   // z = 500000000 - (( dist * 0.25 ) - linear_d) * 110000;
   parameters.offset_x = 42;
   parameters.offset_y = 69;
-  uint8_t show2 = render_pixel(parameters);
+  z = shared.linear_d * 110000.0;
+  for (int x = xStart; x < xEnd; x++)
+  {
+    for (int y = yStart; y < yEnd; y++)
+    {
+      parameters.distSqrt  = distanceSqrt [x][y];
+      parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
+      parameters.z = z - (uint32_t)(parameters.dist * 22000.0);
+      parameters.angle = theta    [x][y];
+      parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.23);
+      shared.currentBuffer[x + y * SCREEN_WIDTH].g = render_pixel(parameters);
+    }
+  }
 
-  // Layer 3 - blue -------------------------------------------------------
-      
   parameters.scale_x = 13000;
   parameters.scale_y = 13000;
-  parameters.newangle = parameters.angle + shared.angle_e - (parameters.dist * 0.19);
-  parameters.z = 500000000 - (( parameters.dist / 4 ) - shared.linear_e) * 120000;
+  // parameters.z = shared.linear_e * 120000;
   // z = 500000000 - (( dist * 0.25 ) - linear_e) * 120000;
   parameters.offset_x = 420;
   parameters.offset_y = 690;
-  uint8_t show3 = render_pixel(parameters);
- 
-  // assign the rendered values to colors (aka colormapping)
-  CRGB color = CRGB(show1, show2, show3);
-
-  // write the rendered pixel into the framebutter
-  // leds[XY(x, y)] = color;
-  // ESP_LOGV(LOG, "%d, %d", x, y);
-  shared.currentBuffer[y * SCREEN_WIDTH + x] = color;
+  z = shared.linear_e * 120000.0;
+  for (int x = xStart; x < xEnd; x++)
+  {
+    for (int y = yStart; y < yEnd; y++)
+    {
+      parameters.distSqrt  = distanceSqrt [x][y];
+      parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
+      parameters.z = z - (uint32_t)(parameters.dist * 30000.0);
+      parameters.angle = theta    [x][y];
+      parameters.newangle = parameters.angle + shared.angle_e - (parameters.dist * 0.19);
+      shared.currentBuffer[x + y * SCREEN_WIDTH].b = render_pixel(parameters);
+    }
+  }
 }
 
 void loop2(void* parameter)
@@ -148,14 +152,7 @@ void loop2(void* parameter)
   while (true)
   {
     xSemaphoreTake(loop2go, portMAX_DELAY);
-    for (int x = 0; x < SCREEN_WIDTH; x++) {
-      for (int y = SCREEN_HEIGHT / 2; y < SCREEN_HEIGHT; y++) {
-
-        // pick data from look up table (helps the framerate on slow processors ;) 
-        doTheThing(x, y);
-
-      }
-    }
+    doTheThing(0, SCREEN_WIDTH, SCREEN_HEIGHT / 2, SCREEN_HEIGHT);
     struct ColorSum colorSum = adjust_gamma(&shared.currentBuffer[NUM_LEDS / 2], NUM_LEDS / 2);
     ESP_LOGV(LOG, "giving it back");
     xSemaphoreGive(loop1go);
@@ -246,9 +243,9 @@ void loop() {
   shared.linear_d = shared.notTime * 0.0030;
   shared.linear_e = shared.notTime * 0.0023;
 
-  shared.angle_c = fmodf(shared.linear_c, 2 * PI);     // some angle offsets
-  shared.angle_d = fmodf(shared.linear_d, 2 * PI);
-  shared.angle_e = fmodf(shared.linear_e, 2 * PI);
+  shared.angle_c = fmod(shared.linear_c, 2 * PI);     // some angle offsets
+  shared.angle_d = fmod(shared.linear_d, 2 * PI);
+  shared.angle_e = fmod(shared.linear_e, 2 * PI);
 
   /*
   float dir_c = sinf(c);                        // some multiplicator offests (for direction control)
@@ -263,15 +260,8 @@ void loop() {
   xSemaphoreGive(loop2go);
   // the HOT LOOP where the magic happens
   ESP_LOGV(LOG, "third");
-  for (int x = 0; x < SCREEN_WIDTH; x++) {
-    for (int y = 0; y < SCREEN_HEIGHT / 2; y++) {
-
-      // pick data from look up table (helps the framerate on slow processors ;) 
-      doTheThing(x, y);
-
-    }
-  }
-
+  doTheThing(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT / 2);
+  
   // make the frame appear nice to humans 
   // (correct for non-linear brightness sensitivity of the human eye)
   ESP_LOGV(LOG, "fourth");
