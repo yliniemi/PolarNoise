@@ -88,11 +88,11 @@ void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
   parameters.scale_y = 15000;
   // newdist = sqrtf(dist);
   // newdist = sqrtApprox(dist);
-  parameters.z = shared.linear_c * 100000;
+  // parameters.z = shared.linear_c * 100000;
   // z = 500000000 - (( dist * 0.166666667 ) - linear_c) * 100000;
   parameters.offset_x = 0;
   parameters.offset_y = 0;
-  uint32_t z = shared.linear_c * 100000.0;
+  uint32_t z = fmod(shared.linear_c * 100000.0, 4294967296);
   for (int x = xStart; x < xEnd; x++)
   {
     for (int y = yStart; y < yEnd; y++)
@@ -101,7 +101,7 @@ void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
       parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
       parameters.z = z - (uint32_t)(parameters.dist * 16666.66667);
       parameters.angle = theta    [x][y];
-      parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.2);
+      parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.1);
       shared.currentBuffer[x + y * SCREEN_WIDTH].r = render_pixel(parameters);
     }
   }
@@ -112,7 +112,7 @@ void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
   // z = 500000000 - (( dist * 0.25 ) - linear_d) * 110000;
   parameters.offset_x = 42;
   parameters.offset_y = 69;
-  z = shared.linear_d * 110000.0;
+  z = fmod(shared.linear_d * 110000.0, 4294967296);
   for (int x = xStart; x < xEnd; x++)
   {
     for (int y = yStart; y < yEnd; y++)
@@ -121,7 +121,7 @@ void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
       parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
       parameters.z = z - (uint32_t)(parameters.dist * 22000.0);
       parameters.angle = theta    [x][y];
-      parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.23);
+      parameters.newangle = parameters.angle + shared.angle_c - (parameters.dist * 0.115);
       shared.currentBuffer[x + y * SCREEN_WIDTH].g = render_pixel(parameters);
     }
   }
@@ -132,7 +132,7 @@ void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
   // z = 500000000 - (( dist * 0.25 ) - linear_e) * 120000;
   parameters.offset_x = 420;
   parameters.offset_y = 690;
-  z = shared.linear_e * 120000.0;
+  z = fmod(shared.linear_e * 120000.0, 4294967296);
   for (int x = xStart; x < xEnd; x++)
   {
     for (int y = yStart; y < yEnd; y++)
@@ -141,7 +141,7 @@ void doTheThing(int xStart, int xEnd, int yStart, int yEnd)
       parameters.dist = parameters.distSqrt * parameters.distSqrt; // * parameters.distSqrt * parameters.distSqrt;
       parameters.z = z - (uint32_t)(parameters.dist * 30000.0);
       parameters.angle = theta    [x][y];
-      parameters.newangle = parameters.angle + shared.angle_e - (parameters.dist * 0.19);
+      parameters.newangle = parameters.angle + shared.angle_e - (parameters.dist * 0.095);
       shared.currentBuffer[x + y * SCREEN_WIDTH].b = render_pixel(parameters);
     }
   }
